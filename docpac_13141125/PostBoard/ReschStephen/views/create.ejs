@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <button onclick="location.href='/'">Back to Home</button>
+    <form action="/createPost" method="POST">
+        <label for="title">Job Title:</label><br>
+        <input type="text" id="title" name="title" required><br><br>
+        <label for="description">Job Description:</label><br>
+        <textarea id="description" name="description" required></textarea><br><br>
+        <button type="submit">Create Post</button>
+    </form>
+</body>
+
+</html>

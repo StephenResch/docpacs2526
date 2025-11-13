@@ -28,8 +28,7 @@ const API_KEY = process.env.API_KEY || 'your_api_key';
 // Middleware
 app.set('view engine', 'ejs');
 app.use(express.static('public'));
-// app.use(express.json());
-// app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true }));
 
 app.use(session({
     store: new SQLiteStore({ db: 'sessions.db', dir: './db' }),
@@ -46,6 +45,39 @@ function isAuthenticated(req, res, next) {
 // Routes
 app.get('/', isAuthenticated, (req, res) => {
     res.render('index', { user: req.session.user });
+});
+
+app.get('/user/:username/posts', isAuthenticated, (req, res) => {
+    const username = req.params.username;
+    db.all('SELECT * FROM posts WHERE author = ? ORDER BY timestamp DESC', [username], (err, posts) => {
+        if (err) {
+            console.error(err.message);
+            res.render('list', {
+                user: req.session.user,
+                posts: [],
+                pageTitle: `Posts by ${username}`
+            });
+        } else {
+            posts.forEach(post => {
+                const date = new Date(post.timestamp);
+                const month = date.getMonth() + 1;
+                const day = date.getDate();
+                const year = date.getFullYear();
+                const timeString = date.toLocaleTimeString('en-US', {
+                    hour12: true,
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                post.timestamp = `${month}/${day}/${year} at ${timeString}`;
+            });
+
+            res.render('list', {
+                user: req.session.user,
+                posts: posts,
+                pageTitle: `Posts by ${username}`
+            });
+        }
+    });
 });
 
 app.get('/login', (req, res) => {
@@ -74,20 +106,95 @@ app.get('/logout', (req, res) => {
     res.redirect('/login');
 });
 
-app.get('/sendpogs', isAuthenticated, (req, res) => {
-    const data = {
-        from: 106,
-        to: 111,
-        amount: 200,
-        pin: 1234,
-        reason: 'Test pog transfer'
-    };
-
-    socket.emit('transferDigipogs', data)
-
-    res.send('Pogs Sent!');
+app.get('/createPost', isAuthenticated, (req, res) => {
+    res.render('create', { user: req.session.user });
 });
 
+app.post('/createPost', isAuthenticated, (req, res) => {
+    const { title, description } = req.body;
+    const author = req.session.user;
+    const timestamp = new Date().toISOString();
+
+    db.run('INSERT INTO posts (title, description, author, timestamp) VALUES (?, ?, ?, ?)',
+        [title, description, author, timestamp], function (err) {
+            if (err) {
+                return console.error(err.message);
+            }
+            console.log(`Post titled "${title}" created by ${author}.`);
+            res.redirect('/');
+        });
+});
+
+app.get('/viewPosts', isAuthenticated, (req, res) => {
+    db.all('SELECT * FROM posts ORDER BY timestamp DESC', [], (err, posts) => {
+        if (err) {
+            console.error(err.message);
+            res.render('list', { user: req.session.user, posts: [], pageTitle: 'Job Posts' });
+        } else {
+            posts.forEach(post => {
+                const date = new Date(post.timestamp);
+                const month = date.getMonth() + 1;
+                const day = date.getDate();
+                const year = date.getFullYear();
+                const timeString = date.toLocaleTimeString('en-US', {
+                    hour12: true,
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                post.timestamp = `${month}/${day}/${year} at ${timeString}`;
+            });
+
+            if (posts.length === 0) {
+                res.render('list', { user: req.session.user, posts: [], pageTitle: 'Job Posts' });
+                return;
+            }
+
+            let completedPosts = 0;
+            posts.forEach(post => {
+                db.all('SELECT * FROM comments WHERE post_id = ? ORDER BY timestamp ASC', [post.id], (err, comments) => {
+                    if (err) {
+                        console.error(err.message);
+                        post.comments = [];
+                    } else {
+                        comments.forEach(comment => {
+                            const date = new Date(comment.timestamp);
+                            const month = date.getMonth() + 1;
+                            const day = date.getDate();
+                            const year = date.getFullYear();
+                            const timeString = date.toLocaleTimeString('en-US', {
+                                hour12: true,
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                            comment.timestamp = `${month}/${day}/${year} at ${timeString}`;
+                        });
+                        post.comments = comments;
+                    }
+
+                    completedPosts++;
+                    if (completedPosts === posts.length) {
+                        res.render('list', { user: req.session.user, posts: posts, pageTitle: 'Job Posts' });
+                    }
+                });
+            });
+        }
+    });
+});
+
+app.post('/addComment', isAuthenticated, (req, res) => {
+    const { post_id, content } = req.body;
+    const author = req.session.user;
+    const timestamp = new Date().toISOString();
+
+    db.run('INSERT INTO comments (post_id, author, content, timestamp) VALUES (?, ?, ?, ?)',
+        [post_id, author, content, timestamp], function (err) {
+            if (err) {
+                return console.error(err.message);
+            }
+            console.log(`Comment added to post ID ${post_id} by ${author}.`);
+            res.redirect('/viewPosts');
+        });
+});
 
 // Socket.io Client to auth server
 const socket = io(AUTH_URL, {
@@ -105,16 +212,6 @@ socket.on('disconnect', () => {
     console.log('Disconnected from auth server');
 });
 
-socket.on('setClass', (classData) => {
-    console.log('Received class data:', classData);
-    socket.emit('classUpdate');
-});
-
-socket.on('classUpdate', (classroomData) => {
-    console.log(`Classroom id: ${classroomData.id}, Name: ${classroomData.className}, Active: ${classroomData.isActive}`);
-    console.log(`Response: ${classroomData.poll.totalResponses} / ${classroomData.poll.totalResponders}`);
-    console.log(classroomData.poll.responses);
-});
 
 
 // Start Server
