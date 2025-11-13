@@ -21,8 +21,8 @@ const db = new sqlite3.Database('./db/database.db', (err) => {
 //Constants
 const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'your_secret_key';
-const AUTH_URL = process.env.AUTH_URL || 'http://localhost:420/oauth';
-const THIS_URL = process.env.THIS_URL || `http://localhost:${PORT}`;
+const AUTH_URL = process.env.AUTH_URL || 'http://172.16.3.159:420/oauth';
+const THIS_URL = process.env.THIS_URL || `http://172.16.3.159:${PORT}`;
 const API_KEY = process.env.API_KEY || 'your_api_key';
 
 // Middleware
@@ -107,7 +107,7 @@ app.get('/logout', (req, res) => {
 });
 
 app.get('/createPost', isAuthenticated, (req, res) => {
-    res.render('create', { user: req.session.user });
+    res.render('create', { user: req.session.user, post: null });
 });
 
 app.post('/createPost', isAuthenticated, (req, res) => {
@@ -123,6 +123,46 @@ app.post('/createPost', isAuthenticated, (req, res) => {
             console.log(`Post titled "${title}" created by ${author}.`);
             res.redirect('/');
         });
+});
+
+app.get('/editPost', isAuthenticated, (req, res) => {
+    const { post_id } = req.query;
+    db.get('SELECT * FROM posts WHERE id = ?', [post_id], (err, post) => {
+        if (err) {
+            console.error(err.message);
+            res.redirect('/');
+        } else {
+            if (post.author !== req.session.user) {
+                return res.status(403).send('Forbidden');
+            }
+            res.render('create', { user: req.session.user, post: post });
+        }
+    });
+});
+
+app.post('/updatePost', isAuthenticated, (req, res) => {
+    console.log('Received data:', req.body);
+    const { post_id, title, description } = req.body;
+
+    db.get('SELECT * FROM posts WHERE id = ?', [post_id], (err, post) => {
+        if (err) {
+            console.error(err.message);
+            res.redirect('/');
+        } else {
+            if (post.author !== req.session.user) {
+                return res.status(403).send('Forbidden');
+            }
+
+            db.run('UPDATE posts SET title = ?, description = ? WHERE id = ?',
+                [title, description, post_id], function (err) {
+                    if (err) {
+                        return console.error(err.message);
+                    }
+                    console.log(`Post ID ${post_id} updated by ${req.session.user}.`);
+                    res.redirect('/');
+                });
+        }
+    });
 });
 
 app.get('/viewPosts', isAuthenticated, (req, res) => {
@@ -196,6 +236,70 @@ app.post('/addComment', isAuthenticated, (req, res) => {
         });
 });
 
+app.post('/deleteComment', isAuthenticated, (req, res) => {
+    const { comment_id } = req.body;
+
+    db.get('SELECT posts.author FROM comments JOIN posts ON comments.post_id = posts.id WHERE comments.id = ?',
+        [comment_id], (err, row) => {
+
+            if (err) {
+                return console.error(err.message);
+            }
+
+            if (!row) {
+                return res.status(404).send('Comment not found');
+            }
+
+            if (row.author !== req.session.user) {
+                return res.status(403).send('Forbidden');
+            }
+
+            db.run('DELETE FROM comments WHERE id = ?', [comment_id], function (err) {
+                if (err) {
+                    return console.error(err.message);
+                }
+                console.log(`Comment ID ${comment_id} deleted by ${req.session.user}.`);
+                res.redirect('/viewPosts');
+            });
+        });
+});
+
+app.post('/deletePost', isAuthenticated, (req, res) => {
+    console.log('DELETE POST ROUTE HIT!')
+    const { post_id } = req.body;
+
+    db.get('SELECT * FROM posts WHERE id = ?', [post_id], (err, post) => {
+        if (err) {
+            console.error(err.message);
+            return res.redirect('/');
+        }
+
+        if (!post) {
+            return res.status(404).send('Post not found');
+        }
+
+        if (post.author !== req.session.user) {
+            return res.status(403).send('Forbidden');
+        }
+
+        // First delete all comments for this post
+        db.run('DELETE FROM comments WHERE post_id = ?', [post_id], function (err) {
+            if (err) {
+                return console.error(err.message);
+            }
+
+            // Then delete the post
+            db.run('DELETE FROM posts WHERE id = ?', [post_id], function (err) {
+                if (err) {
+                    return console.error(err.message);
+                }
+                console.log(`Post ID ${post_id} and its comments deleted by ${req.session.user}.`);
+                res.redirect('/viewPosts');
+            });
+        });
+    });
+});
+
 // Socket.io Client to auth server
 const socket = io(AUTH_URL, {
     extraHeaders: {
@@ -215,6 +319,8 @@ socket.on('disconnect', () => {
 
 
 // Start Server
-app.listen(PORT, () => {
-    console.log(`Server is running at http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server is running on all interfaces at port ${PORT}`);
+    console.log(`Local access: http://localhost:${PORT}`);
+    console.log(`Network access: http://172.16.3.159:${PORT}`);
 });

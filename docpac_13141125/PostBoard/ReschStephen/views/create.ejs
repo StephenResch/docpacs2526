@@ -9,12 +9,18 @@
 
 <body>
     <button onclick="location.href='/'">Back to Home</button>
-    <form action="/createPost" method="POST">
-        <label for="title">Job Title:</label><br>
-        <input type="text" id="title" name="title" required><br><br>
-        <label for="description">Job Description:</label><br>
-        <textarea id="description" name="description" required></textarea><br><br>
-        <button type="submit">Create Post</button>
+    <form action="<%= post ? '/updatePost' : '/createPost' %>" method="POST">
+        <% if (post) { %>
+            <input type="hidden" name="post_id" value="<%= post.id %>">
+            <% } %>
+                <label for="title">Job Title:</label><br>
+                <input type="text" id="title" name="title" value="<%= post ? post.title : '' %>" required><br><br>
+                <label for="description">Job Description:</label><br>
+                <textarea id="description" name="description"
+                    required><%= post ? post.description : '' %></textarea><br><br>
+                <button type="submit">
+                    <%= post ? 'Update Post' : 'Create Post' %>
+                </button>
     </form>
 </body>
 
