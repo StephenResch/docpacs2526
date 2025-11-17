@@ -111,94 +111,48 @@
 <script>
     alert("NOTE: Multiplayer mode is still in development. Features may be incomplete or buggy.");
     alert("Welcome to Multiplayer Button Masher V2!");
-    // Game state variables
+    alert("This mode is meant for you and a friend to compete in real-time to see who can mash the button the most within the time limit.");
+    alert("Good luck and have fun!");
+    // score variables
     var player1Score = 0;
     var player2Score = 0;
     var timer = 20;
     var direction = 0;
-    let timerInterval = null;
-    let directionInterval = null;
-    
-    let gameStarted = false;
-    let turnCount = 0;
-
-    function startTurn() {
-        console.log("Starting turn for", username);
-        // Reset timer
-        timer = 20;
-        updateTimerDisplay();
-        
-        // Clear any existing intervals
-        if (timerInterval) clearInterval(timerInterval);
-        if (directionInterval) clearInterval(directionInterval);
-        
-        // Only start the timers if it's my turn
-        if (isMyTurn) {
-            gameStarted = true;
-            // Start timer countdown
-            timerInterval = setInterval(() => {
-                if (timer > 0) {
-                    timer--;
-                    updateTimerDisplay();
-                    if (timer === 0) {
-                        endTurn();
-                    }
-                }
-            }, 1000);
-            
-            // Start direction changes
-            directionInterval = setInterval(() => {
-                direction = Math.floor(Math.random() * 4);
-                const directions = ["UP", "DOWN", "LEFT", "RIGHT"];
-                document.getElementById("directionBox").innerHTML = directions[direction];
-            }, 2000);
-            
-            // Set initial direction
-            direction = Math.floor(Math.random() * 4);
-            const directions = ["UP", "DOWN", "LEFT", "RIGHT"];
-            document.getElementById("directionBox").innerHTML = directions[direction];
-        } else {
-            // If it's not my turn, just show "Waiting..."
-            document.getElementById("directionBox").innerHTML = "Waiting for other player...";
+    setInterval(()=>{
+        if (timer > 0) {
+            timer = timer - 1
+            if (timer == 0) {
+            alert("Time's up! Final Scores - Player 1: " + player1Score + ", Player 2: " + player2Score);
+            if (player1Score > player2Score) {
+                alert("Player 1 wins!");
+            } else if (player2Score > player1Score) {
+                alert("Player 2 wins!");
+            } else {
+                alert("It's a tie!");
+            }
+            clearInterval(setInterval);
+            }
         }
-    }
-    
-    function endTurn() {
-        console.log("Ending turn for", username);
-        gameStarted = false;
-        turnCount++;
-        
-        // Clear intervals
-        if (timerInterval) clearInterval(timerInterval);
-        if (directionInterval) clearInterval(directionInterval);
-        
-        // Emit end turn event
-        socket.emit('endTurn', {
-            roomId,
-            username,
-            score: isPlayerOne ? player1Score : player2Score,
-            turnCount: turnCount
-        });
-
-        // If both players have had their turn, show final scores
-        if (turnCount >= 2) {
-            setTimeout(() => {
-                alert("Game Over! Final Scores:\nPlayer 1: " + player1Score + "\nPlayer 2: " + player2Score);
-                if (player1Score > player2Score) {
-                    alert("Player 1 wins!");
-                } else if (player2Score > player1Score) {
-                    alert("Player 2 wins!");
-                } else {
-                    alert("It's a tie!");
-                }
-                window.location.href = '/gamemenu';
-            }, 1000);
+        document.getElementById("timer").innerHTML = "Time Left: " + timer
+    }, 1000);
+    // controls
+    setInterval(()=>{
+        if (timer > 0) {
+            direction = Math.floor(Math.random() * 4)
+        if (direction == 0) {
+            document.getElementById("directionBox").innerHTML = "UP"
         }
-    }
-    
-    function updateTimerDisplay() {
-        document.getElementById("timer").innerHTML = "Time Left: " + timer;
-    }
+        if (direction == 1) {
+            document.getElementById("directionBox").innerHTML = "DOWN"
+        }
+        if (direction == 2) {
+            document.getElementById("directionBox").innerHTML = "LEFT"
+        }
+        if (direction == 3) {
+            document.getElementById("directionBox").innerHTML = "RIGHT"
+        }
+        }
+    }, 2000);
     window.addEventListener("gamepadconnected", function(e) {
         console.log("Gamepad connected at index %d: %s. %d buttons, %d axes.",
         e.gamepad.index, e.gamepad.id,
@@ -206,7 +160,7 @@
         setInterval(pollGamepad, 100);
     });
     function pollGamepad() {
-        if (!isMyTurn || !gameStarted) return; // Don't process inputs if it's not player's turn or game hasn't started
+        if (!isMyTurn) return; // Don't process inputs if it's not player's turn
         
         var gamepads = navigator.getGamepads();
         if (!gamepads) {
@@ -214,21 +168,18 @@
         }
         var gp = gamepads[0];
         if (timer > 0 && gp) {
-            // Only check for score if A button (button 0) is pressed
-            if (gp.buttons[0].pressed) {
-                // Check if the joystick is pointing in the correct direction
-                if (gp.axes[1] <= -0.5 && direction == 0) { // Up
-                    updateScore();
-                }
-                else if (gp.axes[1] >= 0.5 && direction == 1) { // Down
-                    updateScore();
-                }
-                else if (gp.axes[0] <= -0.5 && direction == 2) { // Left
-                    updateScore();
-                }
-                else if (gp.axes[0] >= 0.5 && direction == 3) { // Right
-                    updateScore();
-                }
+            // Handle directional inputs
+            if (gp.axes[1] <= -0.5 && direction == 0) { // Up
+                updateScore();
+            }
+            if (gp.axes[1] >= 0.5 && direction == 1) { // Down
+                updateScore();
+            }
+            if (gp.axes[0] <= -0.5 && direction == 2) { // Left
+                updateScore();
+            }
+            if (gp.axes[0] >= 0.5 && direction == 3) { // Right
+                updateScore();
             }
         }
         
@@ -300,25 +251,18 @@
         // Set player position
         isPlayerOne = data.players[0] === username;
         updateTurnDisplay();
-        startTurn(); // Initialize first turn
     });
 
     socket.on('turnChanged', (data) => {
-        // If both turns are complete, don't start a new turn
-        if (turnCount >= 2) return;
-        
         currentPlayer = data.nextPlayer;
         isMyTurn = currentPlayer === username;
+        updateTurnDisplay();
         
         // Update scores
         player1Score = data.scores[Object.keys(data.scores)[0]] || 0;
         player2Score = data.scores[Object.keys(data.scores)[1]] || 0;
         document.getElementById('player1Score').innerHTML = 'Player 1: ' + player1Score;
         document.getElementById('player2Score').innerHTML = 'Player 2: ' + player2Score;
-        
-        // Update turn display and start new turn
-        updateTurnDisplay();
-        startTurn();
     });
 
     function updateTurnDisplay() {
@@ -332,33 +276,21 @@
         }
     }
 
-    // Score update handler
-    function updateScore() {
-        if (isMyTurn) {
-            // Increment local score
-            if (isPlayerOne) {
-                player1Score++;
-                document.getElementById("player1Score").innerHTML = "Player 1: " + player1Score;
-            } else {
-                player2Score++;
-                document.getElementById("player2Score").innerHTML = "Player 2: " + player2Score;
+    // Modified timer to handle turns
+    setInterval(() => {
+        if (timer > 0 && isMyTurn) {
+            timer = timer - 1;
+            if (timer == 0) {
+                socket.emit('endTurn', { 
+                    roomId, 
+                    username, 
+                    score: player1Score // or player2Score depending on player
+                });
+                timer = 20; // Reset timer for next turn
             }
-            
-            // Emit score update to server
-            socket.emit('scoreUpdate', {
-                roomId,
-                username,
-                score: isPlayerOne ? player1Score : player2Score
-            });
-            
-            // Add visual feedback
-            const directionBox = document.getElementById("directionBox");
-            directionBox.style.backgroundColor = "#4CAF50";
-            setTimeout(() => {
-                directionBox.style.backgroundColor = "";
-            }, 100);
         }
-    }
+        document.getElementById("timer").innerHTML = "Time Left: " + timer;
+    }, 1000);
 
     // if someone disconnects
     socket.on('playerDisconnected', (data) => {
