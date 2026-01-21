@@ -16,6 +16,12 @@
  * PARAMETERS
  * ------------------------------------------
  *
+ * @param bloodMoon
+ * @text Enable Blood Moon Event
+ * @type boolean
+ * @default false
+ * @desc If true, enables the blood moon event command.
+ * 
  * @param greetingText
  * @text Greeting Text
  * @type string
@@ -61,6 +67,12 @@
  * @default 0
  * @min 0
  * @desc Additional gold to give on top of the parameter.
+ * 
+ * ------------------------------------------
+ * 
+ * @command bloodMoon
+ * @text Trigger Blood Moon Event
+ * @desc Triggers a blood moon event, reviving defeated enemies.
  */
 
 (() => {
@@ -74,7 +86,8 @@
 
     const greetingText = String(params.greetingText || "Hello!");
     const startingGold = Number(params.startingGold || 0);
-    const enableDebug  = params.enableDebug === "true";
+    const enableDebug = params.enableDebug === "true";
+    const bloodMoon = params.bloodMoon === false ? false : true;
 
     function debugLog(...args) {
         if (enableDebug) {
@@ -86,7 +99,8 @@
     debugLog("Parameters:", {
         greetingText,
         startingGold,
-        enableDebug
+        enableDebug,
+        bloodMoon
     });
 
     // ------------------------------------------
@@ -126,6 +140,38 @@
         } else {
             $gameMessage.add("No gold was given.");
         }
+    });
+
+
+    //
+    // Plugin Command: bloodMoon
+    // When this command is called, it triggers a blood moon event in the game.
+    // The blood moon event shows a cutscene with the text "The Blood Moon Rises!"
+    // Once the cutscene is over, all previously defeated enemies are revived.
+    // The enemy event is erased once a battle is won, so the blood moon will be unerased
+    // Once the command is ran, the bloodMoon state will revert to false, since it only happens once.
+    //
+    PluginManager.registerCommand(PLUGIN_NAME, "bloodMoon", () => {
+        if (!bloodMoon) {
+            debugLog("bloodMoon command called, but blood moon event is disabled.");
+            return;
+        }
+
+        debugLog("bloodMoon command called: Triggering blood moon event.");
+
+        // Show a cutscene message
+        $gameMessage.add("The Blood Moon Rises!");
+
+        // Revive defeated enemies
+        $gameTroop.members().forEach(enemy => {
+            if (enemy.isDead()) {
+                enemy.revive();
+                debugLog(`Revived enemy: ${enemy.name()}`);
+            }
+        });
+
+        // Disable further blood moon events
+        params.bloodMoon = false;
     });
 
 })();
